@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="popup.css" />
+    <title>Reply Filter</title>
+  </head>
+  <body>
+    <header class="head">
+      <h1>Reply Filter</h1>
+      <label class="switch" title="Turn filtering on or off">
+        <input type="checkbox" id="enabled" />
+        <span class="track"><span class="thumb"></span></span>
+      </label>
+    </header>
+
+    <section class="block">
+      <span class="eyebrow">Backend</span>
+      <select id="provider">
+        <option value="anthropic">Claude (Anthropic API)</option>
+        <option value="openai">OpenAI-compatible (cloud)</option>
+        <option value="ollama">Local (Ollama)</option>
+      </select>
+
+      <div class="field" data-show="anthropic openai">
+        <label for="apiKey">API key</label>
+        <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="Stored locally on this device" />
+      </div>
+
+      <div class="field">
+        <label for="model">Model</label>
+        <input id="model" type="text" spellcheck="false" />
+      </div>
+
+      <div class="field">
+        <label for="endpoint">Endpoint</label>
+        <input id="endpoint" type="text" spellcheck="false" />
+      </div>
+
+      <p class="hint" data-show="anthropic">
+        Needs an API key from console.anthropic.com — a Claude Pro subscription won't authenticate here. Cost is a fraction of a cent per call.
+      </p>
+      <p class="hint" data-show="ollama">
+        Run Ollama with the extension origin allowed: set OLLAMA_ORIGINS to include chrome-extension://* and restart it.
+      </p>
+    </section>
+
+    <section class="block">
+      <span class="eyebrow">What to hide</span>
+      <label class="check"><input type="checkbox" class="cat" value="dismissive" /> Dismissive — pure sneer, no argument</label>
+      <label class="check"><input type="checkbox" class="cat" value="ragebait" /> Rage-bait — engineered to provoke</label>
+      <label class="check"><input type="checkbox" class="cat" value="bad_faith" /> Bad faith — strawmanning, trolling</label>
+      <p class="hint">Substantive disagreement and neutral replies are never hidden.</p>
+    </section>
+
+    <section class="block">
+      <span class="eyebrow">Confidence floor — <span id="confVal">0.60</span></span>
+      <input id="minConfidence" type="range" min="0" max="1" step="0.05" />
+      <p class="hint">Higher = hide only when the model is sure. Lower = hide more aggressively.</p>
+    </section>
+
+    <footer class="foot">
+      <button id="test" class="ghost" type="button">Test backend</button>
+      <button id="save" class="primary" type="button">Save</button>
+    </footer>
+    <p id="status" class="status" role="status"></p>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

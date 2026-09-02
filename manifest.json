@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "Reply Filter",
+  "version": "0.1.0",
+  "description": "Filters dismissive, rage-bait, and bad-faith replies on X using a configurable LLM backend (Claude, any OpenAI-compatible cloud endpoint, or local Ollama).",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://api.anthropic.com/*",
+    "https://api.openai.com/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "optional_host_permissions": ["https://*/*"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://x.com/*", "https://twitter.com/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "Reply Filter",
+    "default_popup": "popup.html"
+  }
+}
