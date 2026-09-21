@@ -1,5 +1,6 @@
-/* content.css — collapse + blur for hidden replies, plus the reveal banner.
-   Selectors are intentionally scoped to our own classes so we don't fight X's CSS. */
+/* content.css — collapse + blur for hidden replies, the reveal banner, and the
+   on-tweet score chip. Selectors are intentionally scoped to our own classes
+   so we don't fight X's CSS. */
 
 /* Hide everything inside the article except our banner, and dim/blur the frame.
    pointer-events: none on the article so X's hover cards / prefetch don't fire
@@ -111,86 +112,61 @@ article.rf-hidden {
   outline-offset: 2px;
 }
 
-article.rf-marked {
+/* Compact v/n chip, parked left of the Grok (or ⋮) control. */
+article.rf-scored {
   position: relative;
 }
 
-.rf-mark {
+.rf-score {
   appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  width: 22px;
+  align-self: center;
   height: 22px;
-  padding: 0;
+  padding: 0 7px;
+  margin: 0;
+  margin-inline-end: 4px;
   border: 1px solid rgba(127, 127, 127, 0.35);
   border-radius: 6px;
-  background: rgba(20, 19, 15, 0.72);
-  color: rgb(113, 118, 123);
-  font: 10px/22px ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  background: rgba(20, 19, 15, 0.78);
+  color: rgb(139, 152, 165);
+  font: 10px/20px ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
   letter-spacing: 0.04em;
-  text-transform: lowercase;
+  white-space: nowrap;
+  user-select: none;
   cursor: pointer;
   pointer-events: auto;
-}
-
-.rf-mark:hover,
-.rf-mark:focus-visible {
-  color: #ece7da;
-  border-color: #e0772d;
-}
-
-.rf-mark-float {
-  position: absolute;
-  top: 10px;
-  right: 52px;
   z-index: 6;
 }
 
-#rf-picker {
-  position: fixed;
-  z-index: 2147483647;
-  width: 140px;
-  padding: 8px;
-  border: 1px solid #2c2a22;
-  border-radius: 12px;
-  background: #14130f;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
-  color: #ece7da;
-  font: 12px/1.3 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+.rf-score:focus-visible {
+  outline: 2px solid #1d9bf0;
+  outline-offset: 2px;
 }
 
-#rf-picker[hidden] {
-  display: none !important;
+.rf-score.keep {
+  color: #6fbf73;
+  border-color: rgba(111, 191, 115, 0.45);
 }
 
-.rf-picker-title {
-  font: 10px/1 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: #8d8675;
-  padding: 4px 8px 8px;
-}
-
-#rf-picker button {
-  display: block;
-  width: 100%;
-  appearance: none;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: #ece7da;
-  font: inherit;
-  text-align: left;
-  padding: 8px 10px;
-  cursor: pointer;
-}
-
-#rf-picker button:hover,
-#rf-picker button.on {
-  background: #1c1a15;
-}
-
-#rf-picker button.on {
+.rf-score.hide {
   color: #e0772d;
+  border-color: rgba(224, 119, 45, 0.5);
+}
+
+.rf-score.pending {
+  color: rgb(113, 118, 123);
+}
+
+.rf-score-float {
+  position: absolute;
+  top: 8px;
+  right: 84px;
 }
 
 /* Activity panel host. Positioned from the page stylesheet so X's div rules
@@ -207,5 +183,20 @@ article.rf-marked {
   pointer-events: auto !important;
 }
 #rf-host[hidden] {
+  display: none !important;
+}
+
+/* Score-breakdown popover. Separate from the activity panel so it still
+   works when that panel is hidden. Internals live in a shadow root. */
+#rf-score-pop {
+  all: initial !important;
+  position: fixed !important;
+  top: var(--rf-top, 0) !important;
+  left: var(--rf-left, 0) !important;
+  z-index: 2147483647 !important;
+  display: block !important;
+  pointer-events: auto !important;
+}
+#rf-score-pop[hidden] {
   display: none !important;
 }

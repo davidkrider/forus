@@ -1,15 +1,22 @@
 # ForUs
 
-A Chrome extension that hides **noise** on X (Twitter) — ragebait, propaganda, and
-contentless sneers — without hiding blunt disagreement.
+A Chrome extension that hides **noise** on X (Twitter) — engineered packaging and
+empty posts — without hiding blunt disagreement.
 
-Each post is scored 0–3 on six independent scales:
+Each post is scored 0–3 on three independent scales:
 
-- **Value:** useful, interesting, funny
-- **Noise:** ragebait, propaganda, stupid
+- **Payload:** a real point, question, fact, or joke
+- **Hijack:** outrage / recruitment / engagement-farm packaging
+- **Vacuity:** no thought, slop, or tabloid-empty celebrity chatter
 
-Keep if `max(value) ≥ 2`. Hide only if value is below that **and** `max(noise) ≥ 2`.
+Keep if `payload ≥ 2`. Hide only if payload is below that **and** `max(hijack, vacuity, bot) ≥ 2`.
 A sharply worded correct rebuttal stays visible. An empty sneer does not.
+
+Named mutes (people or words you never want, even if they cured hunger) stay on **X**.
+ForUs additionally uses follower/following ratio, tweet volume, and join date from the
+timeline payload to raise noise on bot-shaped accounts, and shown Community Notes as
+scoring context. Pending notes (if you are a contributor) are visible on the score
+badge and do not hide a post.
 
 The classifier is a typed decision model, not a chat LLM. Two backends:
 
@@ -25,16 +32,16 @@ Not affiliated with X or Twitter.
 3. Open the toolbar popup. Either paste a TypeSafe API key, **or** pick **Laya (local MLX)** after starting the local server (below). Click **Test**.
 4. Visit [x.com](https://x.com) and scroll.
 
-Hidden posts collapse to the author's identity plus **Show post**. Click the small
-**rf** mark on a tweet to label Keep or Hide; those examples are sent with later calls.
+Hidden posts collapse to the author's identity plus **Show post**.
 
 ## Config
 
 | Control | Default | Meaning |
 |---------|---------|---------|
-| Keep if value ≥ | 2 | Highest of useful / interesting / funny |
-| Hide if noise ≥ | 2 | Highest of ragebait / propaganda / stupid |
-| Corrections sent | 20 | Recent Keep/Hide labels included in each Jev call |
+| Keep if payload ≥ | 2 | Contribution: a real point, question, or joke |
+| Hide if noise ≥ | 2 | Highest of hijack / vacuity / bot-shaped |
+| Bot-shaped accounts | on | Follows≈followers plus a tweet firehose; never overrides value |
+| Community Notes | on | Shown note text is classifier context; pending notes are badge-only |
 
 Your API key (cloud only) is stored in `chrome.storage.local` on this device. It never goes into the page.
 

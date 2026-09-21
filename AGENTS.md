@@ -4,12 +4,13 @@ Context for an AI pair-programmer (Cursor, Claude Code, etc.) working on this pr
 
 ## What this is
 
-A Chrome (MV3) browser extension that filters **noise** on X (Twitter) — ragebait,
-propaganda, and contentless posts — while deliberately **never hiding real
+A Chrome (MV3) browser extension that filters **noise** on X (Twitter) —
+engineered packaging and empty posts — while deliberately **never hiding real
 contribution**, even when that contribution is blunt, terse, sarcastic, or harshly
-worded. Each post is scored 0–3 on six independent scales (useful / interesting /
-funny vs ragebait / propaganda / stupid). Keep if max(value) ≥ the keep line; hide
-only if value is below that **and** max(noise) clears the hide floor.
+worded. Each post is scored 0–3 on three independent scales: **payload** (contribution)
+vs **hijack** (engineered outrage/recruitment) and **vacuity** (no thought / tabloid-empty).
+Keep if payload ≥ the keep line; hide only if payload is below that **and**
+max(hijack, vacuity, bot) clears the hide floor.
 
 The backend is a typed decision model, not a chat LLM. **Jev** (TypeSafe cloud) or
 **Laya** ([laya-mlx](https://github.com/mizorewww/laya-mlx) on Apple Silicon). Same
@@ -26,7 +27,8 @@ filter hide substantive-but-harsh posts, that change is wrong even if it "cleans
 timeline. When tuning, optimize for **precision against false positives on value**,
 not for hiding more. The rubric encodes this; see `lib/rubric.js`. Hide rule:
 
-`hide = value < minValueToKeep AND noise ≥ minNoiseToHide` (defaults 2 and 2).
+`hide = payload < minValueToKeep AND noise ≥ minNoiseToHide` (defaults 2 and 2),
+where noise is max(hijack, vacuity, bot).
 
 ## Architecture
 
@@ -34,6 +36,7 @@ not for hiding more. The rubric encodes this; see `lib/rubric.js`. Hide rule:
 content.js ──{type:"classify", items}──▶ background.js ──▶ systemone.classify()
    ▲  (X page, isolated world)              (service worker)        │
    └──────────────{verdicts}───────────────────────────────────────┘
+page-hook.js (MAIN world) harvests timeline GraphQL → postMessage → content.js
         Jev cloud  or  local laya-mlx (scripts/laya_server.py)
 ```
 
@@ -41,10 +44,12 @@ content.js ──{type:"classify", items}──▶ background.js ──▶ syste
   extracts post text via `data-testid` selectors, batches new posts, and collapses/blurs
   the ones the verdict says to hide (with a "Show post" reveal). Also hosts the activity
   panel. Holds **no credentials**.
+- **page-hook.js** — MAIN-world fetch/XHR hook. Reads User counts and Community Notes
+  from timeline JSON X already loaded. No extra profile or About-this-account calls.
 - **background.js** — the only place with the API key. Checks the cache, batches misses into
   one System One call (one post at a time for local Laya), stores results, returns `{id: verdict}`.
   Also serves the popup's "test".
-- **lib/systemone.js** — TypeSafe Jev or local Laya-MLX. Six Score questions per post.
+- **lib/systemone.js** — TypeSafe Jev or local Laya-MLX. Three Score questions per post.
 - **scripts/laya_server.py** — wraps `laya-mlx` behind `POST /v1/systemone`.
 - **lib/rubric.js** — rubric, score questions, few-shot examples. The file you'll edit most.
 - **lib/cache.js** — in-memory LRU keyed on a hash of post text (X re-renders the same
@@ -57,12 +62,13 @@ content.js ──{type:"classify", items}──▶ background.js ──▶ syste
 |------|------|
 | `manifest.json` | MV3 manifest; permissions, content-script matches, background worker |
 | `content.js` | DOM extraction + hide/reveal UX (the brittle part) |
+| `page-hook.js` | MAIN-world harvest of timeline GraphQL (counts, notes) |
 | `content.css` | Collapse/blur styles + reveal banner |
 | `background.js` | Cache + batch + System One dispatch; holds the key |
 | `lib/config.js` | Defaults + `chrome.storage.local` helpers |
 | `lib/rubric.js` | Score questions, Jev rubric, few-shot examples |
+| `lib/signals.js` | Bot-shaped prior from follower/following/volume/age |
 | `lib/cache.js` | LRU text→verdict cache + FNV-1a hash |
-| `lib/corrections.js` | User Keep/Hide labels stored in `chrome.storage.local` |
 | `lib/systemone.js` | Jev cloud + local Laya client |
 | `scripts/laya_server.py` | Local laya-mlx HTTP wrapper |
 | `popup.{html,css,js}` | Settings UI |
@@ -73,16 +79,14 @@ content.js ──{type:"classify", items}──▶ background.js ──▶ syste
 2. Open the toolbar popup. Paste a TypeSafe API key **or** switch to Laya after
    `python scripts/laya_server.py`. Click **Test**.
 3. Visit x.com and scroll. A **ForUs** panel in the bottom-right logs each verdict.
-   Hidden posts collapse to identity + **Show post**. Click the small **rf** mark on a
-   tweet to label Keep or Hide — that example is stored and sent with later classify
-   calls (count is tunable in the popup).
+   Hidden posts collapse to identity + **Show post**.
 4. After editing files, hit the **reload** ↻ on the extension card. Content-script changes
    also need a page refresh. Turn the panel off from the popup once you trust the filter.
 
 Jev lives at `https://api.typesafe.ai/v1/systemone` (model `jev-1.13.0`). Local Laya
 is [laya-mlx](https://github.com/mizorewww/laya-mlx) served by `scripts/laya_server.py`
-at `http://127.0.0.1:8765/v1/systemone`. Each post is six Score questions. Your `rf`
-Keep/Hide corrections go into `state.examples`. English Laya is 512-token context, so
+at `http://127.0.0.1:8765/v1/systemone`. Each post is three Score questions. Built-in
+few-shots live in `lib/rubric.js` (`FEW_SHOT`). English Laya is 512-token context, so
 local calls send one post at a time.
 
 ## Known brittleness / gotchas
@@ -100,14 +104,17 @@ local calls send one post at a time.
 
 ## Refinement backlog (roughly priority-ordered)
 
-1. **Tune the rubric** against your own false positives. Prefer the on-tweet **rf**
-   control (Keep / Hide; stored as few-shots) over hand-editing `FEW_SHOT`.
-   Built-in examples in `lib/rubric.js` still set the baseline.
+1. **Tune the rubric** against your own false positives by editing `FEW_SHOT` and
+   `SCORE_QUESTIONS` in `lib/rubric.js`.
 2. **Cheap pre-filter** before Jev: obvious cases via heuristics, spending API calls
-   only on the ambiguous middle.
+   only on the ambiguous middle. Bot-shaped accounts already raise noise locally.
 3. **Persist the cache** in `chrome.storage.session`.
 4. **Safari port:** the WebExtension code is shared; wrap via Xcode's
    `safari-web-extension-converter` at the end.
+
+Named entity / topic mutes (Kardashians, etc.) stay on **X's muted words**. ForUs does
+not duplicate that denylist. "Account based in" needs a per-account About fetch; we
+do not do that. X does not expose how many people blocked or muted an account.
 
 ## Conventions
 
@@ -116,6 +123,6 @@ local calls send one post at a time.
 - No build step, no dependencies — load-unpacked must keep working.
 - Credentials live only in `background.js` / `chrome.storage`. Never pass the API key to
   the content script or into the page.
-- Keep the six score dimensions in sync across `lib/rubric.js` (`SCORE_DIMS` /
+- Keep the three score dimensions in sync across `lib/rubric.js` (`SCORE_DIMS` /
   `SCORE_QUESTIONS`), `lib/systemone.js`, and the popup sliders (`minValueToKeep` /
-  `minNoiseToHide`).
+  `minNoiseToHide`). Local `bot` noise from `lib/signals.js` is not a Jev question.

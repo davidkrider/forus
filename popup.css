@@ -105,7 +105,7 @@ input[type="range"] {
   width: 100%;
   accent-color: var(--accent);
 }
-#valueVal, #noiseVal, #corrVal { color: var(--accent); font-family: var(--mono); }
+#valueVal, #noiseVal { color: var(--accent); font-family: var(--mono); }
 
 /* On/off switch */
 .switch input { display: none; }

@@ -15,8 +15,8 @@ const els = {
   minNoiseToHide: $("#minNoiseToHide"),
   noiseVal: $("#noiseVal"),
   showPanel: $("#showPanel"),
-  maxCorrections: $("#maxCorrections"),
-  corrVal: $("#corrVal"),
+  useAccountSignals: $("#useAccountSignals"),
+  useCommunityNotes: $("#useCommunityNotes"),
   save: $("#save"),
   test: $("#test"),
   status: $("#status")
@@ -43,8 +43,8 @@ function render() {
   els.minNoiseToHide.value = config.minNoiseToHide;
   els.noiseVal.textContent = String(config.minNoiseToHide);
   els.showPanel.checked = config.showPanel;
-  els.maxCorrections.value = config.maxCorrections;
-  els.corrVal.textContent = String(config.maxCorrections);
+  els.useAccountSignals.checked = config.useAccountSignals !== false;
+  els.useCommunityNotes.checked = config.useCommunityNotes !== false;
   applyBackendFields();
 }
 
@@ -57,7 +57,8 @@ function collect() {
   config.minValueToKeep = Number(els.minValueToKeep.value);
   config.minNoiseToHide = Number(els.minNoiseToHide.value);
   config.showPanel = els.showPanel.checked;
-  config.maxCorrections = Number(els.maxCorrections.value);
+  config.useAccountSignals = els.useAccountSignals.checked;
+  config.useCommunityNotes = els.useCommunityNotes.checked;
 }
 
 function setStatus(msg, kind = "") {
@@ -71,9 +72,6 @@ els.minValueToKeep.addEventListener("input", () => {
 });
 els.minNoiseToHide.addEventListener("input", () => {
   els.noiseVal.textContent = String(els.minNoiseToHide.value);
-});
-els.maxCorrections.addEventListener("input", () => {
-  els.corrVal.textContent = String(els.maxCorrections.value);
 });
 
 els.save.addEventListener("click", async () => {

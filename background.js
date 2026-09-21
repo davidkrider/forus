@@ -10,8 +10,7 @@ import {
   LAYA_ENDPOINT,
   LAYA_MODEL
 } from "./lib/systemone.js";
-import { KEEP_SCORES, HIDE_SCORES } from "./lib/rubric.js";
-import { loadCorrections, addCorrection, recent } from "./lib/corrections.js";
+import { KEEP_SCORES } from "./lib/rubric.js";
 import * as cache from "./lib/cache.js";
 
 function chunk(arr, size) {
@@ -26,7 +25,9 @@ async function classifyItems(items) {
   const missKeyById = {};
 
   for (const it of items) {
-    const key = cache.hashText(it.text);
+    const key = cache.hashText(
+      [it.text, it.account?.handle || "", it.note?.status || "", it.note?.text || ""].join("\n")
+    );
     const cached = cache.get(key);
     if (cached) {
       result[it.id] = { ...cached, cached: true };
@@ -39,7 +40,6 @@ async function classifyItems(items) {
   if (misses.length === 0) return result;
 
   const config = await loadConfig();
-  const userExamples = recent(await loadCorrections(), config.maxCorrections);
   const local = config.backend === "laya";
 
   const controller = new AbortController();
@@ -55,7 +55,6 @@ async function classifyItems(items) {
         apiKey: local ? "" : config.apiKey,
         model: local ? config.layaModel || LAYA_MODEL : JEV_MODEL,
         items: batch,
-        userExamples,
         signal: controller.signal,
         compact: local
       });
@@ -93,38 +92,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.type === "test") {
     classifyItems([{ id: "test", text: "cope harder, nobody asked" }])
       .then((verdicts) => sendResponse({ ok: true, verdict: verdicts.test }))
-      .catch((err) => sendResponse({ ok: false, error: String(err?.message || err) }));
-    return true;
-  }
-
-  if (msg?.type === "correct") {
-    const text = String(msg.text || "");
-    const verdict = msg.verdict === "hide" ? "hide" : msg.verdict === "keep" ? "keep" : null;
-    if (!text || !verdict) {
-      sendResponse({ ok: false, error: "Need post text and keep or hide." });
-      return;
-    }
-    addCorrection({ text, verdict })
-      .then(() => {
-        const v =
-          verdict === "keep"
-            ? {
-                scores: KEEP_SCORES,
-                category: "value",
-                confidence: 1,
-                reason: "you labeled keep",
-                forceKeep: true
-              }
-            : {
-                scores: HIDE_SCORES,
-                category: "noise",
-                confidence: 1,
-                reason: "you labeled hide",
-                forceHide: true
-              };
-        cache.set(cache.hashText(text), v);
-        sendResponse({ ok: true, verdict: { ...v, cached: true } });
-      })
       .catch((err) => sendResponse({ ok: false, error: String(err?.message || err) }));
     return true;
   }

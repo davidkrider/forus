@@ -46,21 +46,25 @@
     </section>
 
     <section class="block">
-      <span class="eyebrow">Keep if value ≥ <span id="valueVal">2</span></span>
+      <span class="eyebrow">Keep if payload ≥ <span id="valueVal">2</span></span>
       <input id="minValueToKeep" type="range" min="0" max="3" step="1" />
-      <p class="hint">Value is the highest of useful, interesting, and funny (0–3). At 2, a real point or a real joke always stays visible.</p>
+      <p class="hint">Payload is contribution (0–3): a real point, a real question, or a real joke. At 2, blunt-but-real always stays visible.</p>
     </section>
 
     <section class="block">
       <span class="eyebrow">Hide if noise ≥ <span id="noiseVal">2</span></span>
       <input id="minNoiseToHide" type="range" min="0" max="3" step="1" />
-      <p class="hint">Noise is the highest of ragebait, propaganda, and stupid. Hide only when value is below the keep line and noise clears this floor.</p>
+      <p class="hint">Noise is the highest of hijack (engineered packaging), vacuity (no thought / tabloid-empty), and (if enabled) a bot-shaped follow graph. Hide only when payload is below the keep line and noise clears this floor. Named mutes stay on X.</p>
     </section>
 
     <section class="block">
-      <span class="eyebrow">Corrections sent — <span id="corrVal">20</span></span>
-      <input id="maxCorrections" type="range" min="0" max="50" step="1" />
-      <p class="hint">How many of your recent Keep/Hide labels to send with each call. More = closer to your taste. 0 = don't send them; exact-text overrides still apply.</p>
+      <label class="check"><input type="checkbox" id="useAccountSignals" /> Bot-shaped accounts</label>
+      <p class="hint">Uses follower/following ratio, tweet volume, and join date from the timeline payload X already loaded. Same-magnitude follow graphs with a firehose raise noise. They never override a real point.</p>
+    </section>
+
+    <section class="block">
+      <label class="check"><input type="checkbox" id="useCommunityNotes" /> Community Notes</label>
+      <p class="hint">Shown notes go to the classifier as context. Pending notes (if you're a contributor) appear on the score badge only — they do not hide a post.</p>
     </section>
 
     <section class="block">

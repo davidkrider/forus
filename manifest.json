@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "ForUs",
   "version": "0.1.0",
-  "description": "Hides noise on X — ragebait, propaganda, contentless sneers — without hiding blunt disagreement.",
+  "description": "Hides noise on X — engineered packaging and empty posts — without hiding blunt disagreement.",
   "permissions": ["storage"],
   "host_permissions": [
     "https://api.typesafe.ai/*",
@@ -14,6 +14,12 @@
     "type": "module"
   },
   "content_scripts": [
+    {
+      "matches": ["https://x.com/*", "https://twitter.com/*"],
+      "js": ["page-hook.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
     {
       "matches": ["https://x.com/*", "https://twitter.com/*"],
       "js": ["content.js"],
