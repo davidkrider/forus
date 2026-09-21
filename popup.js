@@ -1,19 +1,22 @@
 // popup.js (module)
-// Loads config into the form, shows only the selected provider's fields, saves back,
-// and can run a one-shot "test" against the chosen backend.
+// Loads config into the form, saves back, and runs a one-shot smoke test.
 
 import { loadConfig, saveConfig, DEFAULT_CONFIG } from "./lib/config.js";
 
 const $ = (sel) => document.querySelector(sel);
 const els = {
   enabled: $("#enabled"),
-  provider: $("#provider"),
+  backend: $("#backend"),
   apiKey: $("#apiKey"),
-  model: $("#model"),
-  endpoint: $("#endpoint"),
-  minConfidence: $("#minConfidence"),
-  confVal: $("#confVal"),
-  cats: Array.from(document.querySelectorAll(".cat")),
+  layaEndpoint: $("#layaEndpoint"),
+  layaModel: $("#layaModel"),
+  minValueToKeep: $("#minValueToKeep"),
+  valueVal: $("#valueVal"),
+  minNoiseToHide: $("#minNoiseToHide"),
+  noiseVal: $("#noiseVal"),
+  showPanel: $("#showPanel"),
+  maxCorrections: $("#maxCorrections"),
+  corrVal: $("#corrVal"),
   save: $("#save"),
   test: $("#test"),
   status: $("#status")
@@ -21,14 +24,8 @@ const els = {
 
 let config = structuredClone(DEFAULT_CONFIG);
 
-function applyProviderFields() {
-  const p = els.provider.value;
-  const s = config.providers[p];
-  els.apiKey.value = s.apiKey ?? "";
-  els.model.value = s.model ?? "";
-  els.endpoint.value = s.endpoint ?? "";
-
-  // Show/hide elements whose data-show list includes the current provider.
+function applyBackendFields() {
+  const p = els.backend.value;
   for (const node of document.querySelectorAll("[data-show]")) {
     const list = node.getAttribute("data-show").split(/\s+/);
     node.hidden = !list.includes(p);
@@ -37,26 +34,30 @@ function applyProviderFields() {
 
 function render() {
   els.enabled.checked = config.enabled;
-  els.provider.value = config.provider;
-  els.minConfidence.value = config.minConfidence;
-  els.confVal.textContent = Number(config.minConfidence).toFixed(2);
-  for (const c of els.cats) c.checked = config.hideCategories.includes(c.value);
-  applyProviderFields();
+  els.backend.value = config.backend === "laya" ? "laya" : "jev";
+  els.apiKey.value = config.apiKey ?? "";
+  els.layaEndpoint.value = config.layaEndpoint ?? "";
+  els.layaModel.value = config.layaModel ?? "";
+  els.minValueToKeep.value = config.minValueToKeep;
+  els.valueVal.textContent = String(config.minValueToKeep);
+  els.minNoiseToHide.value = config.minNoiseToHide;
+  els.noiseVal.textContent = String(config.minNoiseToHide);
+  els.showPanel.checked = config.showPanel;
+  els.maxCorrections.value = config.maxCorrections;
+  els.corrVal.textContent = String(config.maxCorrections);
+  applyBackendFields();
 }
 
 function collect() {
   config.enabled = els.enabled.checked;
-  config.provider = els.provider.value;
-  config.minConfidence = Number(els.minConfidence.value);
-  config.hideCategories = els.cats.filter((c) => c.checked).map((c) => c.value);
-
-  const p = els.provider.value;
-  config.providers[p] = {
-    ...config.providers[p],
-    apiKey: els.apiKey.value.trim(),
-    model: els.model.value.trim(),
-    endpoint: els.endpoint.value.trim()
-  };
+  config.backend = els.backend.value === "laya" ? "laya" : "jev";
+  config.apiKey = els.apiKey.value.trim();
+  config.layaEndpoint = els.layaEndpoint.value.trim();
+  config.layaModel = els.layaModel.value.trim();
+  config.minValueToKeep = Number(els.minValueToKeep.value);
+  config.minNoiseToHide = Number(els.minNoiseToHide.value);
+  config.showPanel = els.showPanel.checked;
+  config.maxCorrections = Number(els.maxCorrections.value);
 }
 
 function setStatus(msg, kind = "") {
@@ -64,14 +65,15 @@ function setStatus(msg, kind = "") {
   els.status.className = "status" + (kind ? " " + kind : "");
 }
 
-// Wiring
-els.provider.addEventListener("change", () => {
-  // Persist current edits into the in-memory config before swapping field views.
-  collect();
-  applyProviderFields();
+els.backend.addEventListener("change", applyBackendFields);
+els.minValueToKeep.addEventListener("input", () => {
+  els.valueVal.textContent = String(els.minValueToKeep.value);
 });
-els.minConfidence.addEventListener("input", () => {
-  els.confVal.textContent = Number(els.minConfidence.value).toFixed(2);
+els.minNoiseToHide.addEventListener("input", () => {
+  els.noiseVal.textContent = String(els.minNoiseToHide.value);
+});
+els.maxCorrections.addEventListener("input", () => {
+  els.corrVal.textContent = String(els.maxCorrections.value);
 });
 
 els.save.addEventListener("click", async () => {
@@ -82,8 +84,8 @@ els.save.addEventListener("click", async () => {
 
 els.test.addEventListener("click", async () => {
   collect();
-  await saveConfig(config); // test uses whatever the background reads from storage
-  setStatus("Testing backend\u2026");
+  await saveConfig(config);
+  setStatus("Testing…");
   chrome.runtime.sendMessage({ type: "test" }, (resp) => {
     if (chrome.runtime.lastError) {
       setStatus(chrome.runtime.lastError.message, "err");
@@ -94,7 +96,8 @@ els.test.addEventListener("click", async () => {
       return;
     }
     const v = resp.verdict;
-    setStatus(`OK \u2014 sample classified as "${v.category}" (${v.confidence.toFixed(2)}).`, "ok");
+    const tag = v.reason || v.category || "?";
+    setStatus(`OK — ${tag}.`, "ok");
   });
 });
 

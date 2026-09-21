@@ -4,11 +4,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="popup.css" />
-    <title>Reply Filter</title>
+    <title>ForUs</title>
   </head>
   <body>
     <header class="head">
-      <h1>Reply Filter</h1>
+      <h1>ForUs</h1>
       <label class="switch" title="Turn filtering on or off">
         <input type="checkbox" id="enabled" />
         <span class="track"><span class="thumb"></span></span>
@@ -17,51 +17,59 @@
 
     <section class="block">
       <span class="eyebrow">Backend</span>
-      <select id="provider">
-        <option value="anthropic">Claude (Anthropic API)</option>
-        <option value="openai">OpenAI-compatible (cloud)</option>
-        <option value="ollama">Local (Ollama)</option>
+      <select id="backend">
+        <option value="jev">Jev (TypeSafe cloud)</option>
+        <option value="laya">Laya (local MLX)</option>
       </select>
 
-      <div class="field" data-show="anthropic openai">
+      <div class="field" data-show="jev">
         <label for="apiKey">API key</label>
         <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="Stored locally on this device" />
       </div>
 
-      <div class="field">
-        <label for="model">Model</label>
-        <input id="model" type="text" spellcheck="false" />
+      <div class="field" data-show="laya">
+        <label for="layaEndpoint">Local endpoint</label>
+        <input id="layaEndpoint" type="text" spellcheck="false" />
       </div>
 
-      <div class="field">
-        <label for="endpoint">Endpoint</label>
-        <input id="endpoint" type="text" spellcheck="false" />
+      <div class="field" data-show="laya">
+        <label for="layaModel">Model</label>
+        <input id="layaModel" type="text" spellcheck="false" />
       </div>
 
-      <p class="hint" data-show="anthropic">
-        Needs an API key from console.anthropic.com — a Claude Pro subscription won't authenticate here. Cost is a fraction of a cent per call.
+      <p class="hint" data-show="jev">
+        TypeSafe decision API, model jev-1.13.0. Key from the TypeSafe console. Never sent to the page.
       </p>
-      <p class="hint" data-show="ollama">
-        Run Ollama with the extension origin allowed: set OLLAMA_ORIGINS to include chrome-extension://* and restart it.
+      <p class="hint" data-show="laya">
+        Apple Silicon local runtime (~10ms/question). Install with <code>pip install laya-mlx</code>, then <code>python scripts/laya_server.py</code>. Same System One contract as Jev — no API key.
       </p>
     </section>
 
     <section class="block">
-      <span class="eyebrow">What to hide</span>
-      <label class="check"><input type="checkbox" class="cat" value="dismissive" /> Dismissive — pure sneer, no argument</label>
-      <label class="check"><input type="checkbox" class="cat" value="ragebait" /> Rage-bait — engineered to provoke</label>
-      <label class="check"><input type="checkbox" class="cat" value="bad_faith" /> Bad faith — strawmanning, trolling</label>
-      <p class="hint">Substantive disagreement and neutral replies are never hidden.</p>
+      <span class="eyebrow">Keep if value ≥ <span id="valueVal">2</span></span>
+      <input id="minValueToKeep" type="range" min="0" max="3" step="1" />
+      <p class="hint">Value is the highest of useful, interesting, and funny (0–3). At 2, a real point or a real joke always stays visible.</p>
     </section>
 
     <section class="block">
-      <span class="eyebrow">Confidence floor — <span id="confVal">0.60</span></span>
-      <input id="minConfidence" type="range" min="0" max="1" step="0.05" />
-      <p class="hint">Higher = hide only when the model is sure. Lower = hide more aggressively.</p>
+      <span class="eyebrow">Hide if noise ≥ <span id="noiseVal">2</span></span>
+      <input id="minNoiseToHide" type="range" min="0" max="3" step="1" />
+      <p class="hint">Noise is the highest of ragebait, propaganda, and stupid. Hide only when value is below the keep line and noise clears this floor.</p>
+    </section>
+
+    <section class="block">
+      <span class="eyebrow">Corrections sent — <span id="corrVal">20</span></span>
+      <input id="maxCorrections" type="range" min="0" max="50" step="1" />
+      <p class="hint">How many of your recent Keep/Hide labels to send with each call. More = closer to your taste. 0 = don't send them; exact-text overrides still apply.</p>
+    </section>
+
+    <section class="block">
+      <label class="check"><input type="checkbox" id="showPanel" /> Activity panel on X</label>
+      <p class="hint">Live log of classifications as you scroll. Turn off once you're tuned.</p>
     </section>
 
     <footer class="foot">
-      <button id="test" class="ghost" type="button">Test backend</button>
+      <button id="test" class="ghost" type="button">Test</button>
       <button id="save" class="primary" type="button">Save</button>
     </footer>
     <p id="status" class="status" role="status"></p>

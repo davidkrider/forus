@@ -1,16 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "Reply Filter",
+  "name": "ForUs",
   "version": "0.1.0",
-  "description": "Filters dismissive, rage-bait, and bad-faith replies on X using a configurable LLM backend (Claude, any OpenAI-compatible cloud endpoint, or local Ollama).",
+  "description": "Hides noise on X — ragebait, propaganda, contentless sneers — without hiding blunt disagreement.",
   "permissions": ["storage"],
   "host_permissions": [
-    "https://api.anthropic.com/*",
-    "https://api.openai.com/*",
-    "http://localhost/*",
-    "http://127.0.0.1/*"
+    "https://api.typesafe.ai/*",
+    "http://127.0.0.1/*",
+    "http://localhost/*"
   ],
-  "optional_host_permissions": ["https://*/*"],
   "background": {
     "service_worker": "background.js",
     "type": "module"
@@ -24,7 +22,7 @@
     }
   ],
   "action": {
-    "default_title": "Reply Filter",
+    "default_title": "ForUs",
     "default_popup": "popup.html"
   }
 }

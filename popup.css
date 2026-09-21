@@ -64,12 +64,13 @@ input[type="password"] {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 8px 10px;
-  font: 12px/1.3 var(--sans);
+  font: 12px/1.3 var(--mono);
 }
 
-input[type="text"] { font-family: var(--mono); }
-
-select { margin-bottom: 10px; }
+select {
+  font-family: var(--sans);
+  margin-bottom: 4px;
+}
 
 .field { margin-top: 10px; }
 .field label {
@@ -79,6 +80,11 @@ select { margin-bottom: 10px; }
   text-transform: uppercase;
   color: var(--muted);
   margin-bottom: 5px;
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 10px;
 }
 
 .hint {
@@ -99,7 +105,7 @@ input[type="range"] {
   width: 100%;
   accent-color: var(--accent);
 }
-#confVal { color: var(--accent); font-family: var(--mono); }
+#valueVal, #noiseVal, #corrVal { color: var(--accent); font-family: var(--mono); }
 
 /* On/off switch */
 .switch input { display: none; }
@@ -152,5 +158,4 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .status.ok { color: #6fbf73; }
 .status.err { color: #e26d6d; }
 
-/* Visibility toggling driven by popup.js via [hidden]. */
 [hidden] { display: none !important; }
