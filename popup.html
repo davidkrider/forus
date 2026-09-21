@@ -48,18 +48,18 @@
     <section class="block">
       <span class="eyebrow">Keep if payload ≥ <span id="valueVal">2</span></span>
       <input id="minValueToKeep" type="range" min="0" max="3" step="1" />
-      <p class="hint">Payload is contribution (0–3): a real point, a real question, or a real joke. At 2, blunt-but-real always stays visible.</p>
+      <p class="hint">Payload is contribution (0–3): a real point, a directed question, or a real joke. Open-ended “what’s your favorite / name one” reply-bait is not a point. At 2, blunt-but-real always stays visible.</p>
     </section>
 
     <section class="block">
       <span class="eyebrow">Hide if noise ≥ <span id="noiseVal">2</span></span>
       <input id="minNoiseToHide" type="range" min="0" max="3" step="1" />
-      <p class="hint">Noise is the highest of hijack (engineered packaging), vacuity (no thought / tabloid-empty), and (if enabled) a bot-shaped follow graph. Hide only when payload is below the keep line and noise clears this floor. Named mutes stay on X.</p>
+      <p class="hint">Noise is the highest of hijack (engineered packaging, including friendly reply-harvest), vacuity (no thought / tabloid-empty), persona (costume identity), and (if enabled) a bot-shaped follow graph. Hide only when payload is below the keep line and noise clears this floor. Named mutes stay on X.</p>
     </section>
 
     <section class="block">
-      <label class="check"><input type="checkbox" id="useAccountSignals" /> Bot-shaped accounts</label>
-      <p class="hint">Uses follower/following ratio, tweet volume, and join date from the timeline payload X already loaded. Same-magnitude follow graphs with a firehose raise noise. They never override a real point.</p>
+      <label class="check"><input type="checkbox" id="useAccountSignals" /> Account signals</label>
+      <p class="hint">Sends display name, handle, and bio to Jev as a persona / controversialness score. Also uses follower/following ratio, tweet volume, and join date as a local bot-shaped prior. Follow-graph discovery is untouched: this scores the author, not who you follow. Never overrides a real point.</p>
     </section>
 
     <section class="block">

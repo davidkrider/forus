@@ -3,17 +3,19 @@
 A Chrome extension that hides **noise** on X (Twitter) — engineered packaging and
 empty posts — without hiding blunt disagreement.
 
-Each post is scored 0–3 on three independent scales:
+Each post is scored 0–3 on four independent Jev scales:
 
-- **Payload:** a real point, question, fact, or joke
-- **Hijack:** outrage / recruitment / engagement-farm packaging
+- **Payload:** a real point, directed question, fact, or joke
+- **Hijack:** outrage / recruitment / reply-harvest packaging
 - **Vacuity:** no thought, slop, or tabloid-empty celebrity chatter
+- **Persona:** how costume-like or controversial the account identity (name, handle, bio) is
 
-Keep if `payload ≥ 2`. Hide only if payload is below that **and** `max(hijack, vacuity, bot) ≥ 2`.
+Keep if `payload ≥ 2`. Hide only if payload is below that **and** `max(hijack, vacuity, persona, bot) ≥ 2`.
 A sharply worded correct rebuttal stays visible. An empty sneer does not.
 
 Named mutes (people or words you never want, even if they cured hunger) stay on **X**.
-ForUs additionally uses follower/following ratio, tweet volume, and join date from the
+ForUs additionally sends display name, handle, and bio to Jev for the persona score,
+uses follower/following ratio, tweet volume, and join date from the
 timeline payload to raise noise on bot-shaped accounts, and shown Community Notes as
 scoring context. Pending notes (if you are a contributor) are visible on the score
 badge and do not hide a post.
@@ -39,8 +41,8 @@ Hidden posts collapse to the author's identity plus **Show post**.
 | Control | Default | Meaning |
 |---------|---------|---------|
 | Keep if payload ≥ | 2 | Contribution: a real point, question, or joke |
-| Hide if noise ≥ | 2 | Highest of hijack / vacuity / bot-shaped |
-| Bot-shaped accounts | on | Follows≈followers plus a tweet firehose; never overrides value |
+| Hide if noise ≥ | 2 | Highest of hijack / vacuity / persona / bot-shaped |
+| Account signals | on | Jev scores name/handle/bio for persona; local follows≈followers firehose; never overrides payload |
 | Community Notes | on | Shown note text is classifier context; pending notes are badge-only |
 
 Your API key (cloud only) is stored in `chrome.storage.local` on this device. It never goes into the page.

@@ -35,13 +35,21 @@
     const tc = node.tweet_counts || node.tweetCounts || {};
     const handle = asHandle(core.screen_name || core.screenName || legacy.screen_name);
     if (!handle) return null;
+    const name = String(core.name || legacy.name || "").trim();
+    const bio = String(
+      node.profile_bio?.description ||
+        node.profileBio?.description ||
+        legacy.description ||
+        ""
+    ).trim();
     const followers = num(rc.followers, rc.follower_count, legacy.followers_count);
     const following = num(rc.following, rc.follow_count, legacy.friends_count);
     const tweetsN = num(tc.tweets, tc.tweet_count, legacy.statuses_count);
     const createdAt = core.created_at || core.createdAt || legacy.created_at || null;
-    if (followers == null && following == null && tweetsN == null && !createdAt) return null;
     return {
       handle,
+      name,
+      bio: bio.slice(0, 240),
       restId: node.rest_id || node.restId || legacy.id_str || "",
       followers,
       following,
@@ -98,6 +106,8 @@
     const prev = (u.handle && users.get(u.handle)) || {};
     const merged = {
       handle: u.handle || prev.handle || "",
+      name: u.name || prev.name || "",
+      bio: u.bio || prev.bio || "",
       restId: u.restId || prev.restId || "",
       followers: u.followers ?? prev.followers ?? null,
       following: u.following ?? prev.following ?? null,

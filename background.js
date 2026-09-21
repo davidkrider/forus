@@ -26,7 +26,7 @@ async function classifyItems(items) {
 
   for (const it of items) {
     const key = cache.hashText(
-      [it.text, it.account?.handle || "", it.note?.status || "", it.note?.text || ""].join("\n")
+      [it.text, it.account?.handle || "", it.account?.name || "", it.account?.bio || "", it.note?.status || "", it.note?.text || ""].join("\n")
     );
     const cached = cache.get(key);
     if (cached) {

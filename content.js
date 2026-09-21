@@ -445,7 +445,7 @@
       name: name || "Unknown",
       handle,
       avatar: avatarImg?.currentSrc || avatarImg?.src || "",
-      bio: bioNode ? bioNode.innerText.trim() : ""
+      bio: bioNode ? bioNode.innerText.trim() : null
     };
   }
 
@@ -512,6 +512,18 @@
     return { score, why: bits.join(" · ") };
   }
 
+  function mergeAccount(sigAccount, author) {
+    const handle = String(author?.handle || sigAccount?.handle || "")
+      .replace(/^@/, "")
+      .toLowerCase();
+    const name = author?.name && author.name !== "Unknown" ? author.name : sigAccount?.name || "";
+    const bio = author?.bio != null && author.bio !== "" ? author.bio : sigAccount?.bio;
+    if (!sigAccount && !handle && !name) return null;
+    const out = { ...(sigAccount || {}), handle, name };
+    if (bio != null) out.bio = bio;
+    return out;
+  }
+
   function lookupSignals(tweetId, handle) {
     const key = String(handle || "")
       .replace(/^@/, "")
@@ -527,8 +539,14 @@
     v.signals = v.signals || {};
     v.signals.account = account || v.signals.account || null;
     if (!settings.useAccountSignals) {
-      if (v.scores) delete v.scores.bot;
-      if (v.breakdown) delete v.breakdown.bot;
+      if (v.scores) {
+        delete v.scores.bot;
+        delete v.scores.persona;
+      }
+      if (v.breakdown) {
+        delete v.breakdown.bot;
+        delete v.breakdown.persona;
+      }
       return v;
     }
     const bot = botShape(account);
@@ -540,11 +558,22 @@
     return v;
   }
 
+  function requeue(id, el) {
+    if (!el?.isConnected) return;
+    if (queue.some((it) => it.id === id)) return;
+    const text = extractText(el);
+    if (!text) return;
+    queue.push(buildItem(el, id, text));
+    scheduleFlush();
+  }
+
   function buildItem(article, id, text) {
+    const author = extractAuthor(article);
     const tweetId = extractTweetId(article);
-    const handle = extractAuthor(article).handle;
+    const handle = author.handle;
     if (tweetId) article.setAttribute("data-rf-tweet", tweetId);
     const sig = lookupSignals(tweetId, handle);
+    const account = mergeAccount(sig.account, author);
     const domNote = extractDomNote(article);
     let note = sig.note;
     if (domNote && (!note || (domNote.status === "shown" && note.status !== "shown"))) {
@@ -555,7 +584,7 @@
       text,
       tweetId,
       handle,
-      account: settings.useAccountSignals ? sig.account : null,
+      account: settings.useAccountSignals ? account : null,
       note: settings.useCommunityNotes ? note : null,
       useAccountSignals: settings.useAccountSignals,
       useCommunityNotes: settings.useCommunityNotes
@@ -568,6 +597,8 @@
       const prev = usersByHandle.get(u.handle) || {};
       usersByHandle.set(u.handle, {
         handle: u.handle,
+        name: u.name || prev.name || "",
+        bio: u.bio || prev.bio || "",
         restId: u.restId || prev.restId || "",
         followers: u.followers ?? prev.followers ?? null,
         following: u.following ?? prev.following ?? null,
@@ -588,7 +619,13 @@
     }
     for (const it of queue) {
       const sig = lookupSignals(it.tweetId, it.handle);
-      if (sig.account) it.account = sig.account;
+      if (sig.account) {
+        it.account = mergeAccount(sig.account, {
+          name: it.account?.name,
+          handle: it.handle,
+          bio: it.account?.bio
+        });
+      }
       if (sig.note && settings.useCommunityNotes) it.note = sig.note;
     }
     for (const [id, el] of elById) {
@@ -596,18 +633,25 @@
       const v = verdictById.get(id);
       if (!v?.scores) continue;
       const tweetId = el.getAttribute("data-rf-tweet") || extractTweetId(el);
-      const handle = extractAuthor(el).handle;
-      const sig = lookupSignals(tweetId, handle);
+      const author = extractAuthor(el);
+      const sig = lookupSignals(tweetId, author.handle);
+      const account = mergeAccount(sig.account, author);
       const prevBot = v.scores?.bot;
       const prevNote = v.signals?.note?.text || v.signals?.note?.status || "";
-      applyBotPrior(v, sig.account);
+      const hadBio = Boolean(String(v.signals?.account?.bio || "").trim());
+      applyBotPrior(v, account);
       if (settings.useCommunityNotes && sig.note) {
         v.signals = v.signals || {};
         v.signals.note = sig.note;
       }
       const nextBot = v.scores?.bot;
       const nextNote = v.signals?.note?.text || v.signals?.note?.status || "";
-      if (prevBot !== nextBot || prevNote !== nextNote) applyOne(id, v);
+      const hasBio = Boolean(String(account?.bio || "").trim());
+      if (settings.useAccountSignals && !hadBio && hasBio) {
+        requeue(id, el);
+      } else if (prevBot !== nextBot || prevNote !== nextNote) {
+        applyOne(id, v);
+      }
     }
   }
 
@@ -694,7 +738,7 @@
   // --- Applying verdicts ----------------------------------------------------
 
   const VALUE_DIMS = ["payload"];
-  const NOISE_DIMS = ["hijack", "vacuity"];
+  const NOISE_DIMS = ["hijack", "vacuity", "persona"];
   const SIGNAL_NOISE_DIMS = ["bot"];
 
   function dimMax(scores, dims) {
@@ -1044,16 +1088,24 @@
     noiseSec.className = "sec";
     noiseSec.textContent = "Noise";
     body.append(noiseSec);
-    appendDimRows(body, v, NOISE_DIMS, "noise");
+    appendDimRows(body, v, NOISE_DIMS.filter((d) => d !== "persona" || v.scores?.persona != null), "noise");
     if (v.scores && Object.prototype.hasOwnProperty.call(v.scores, "bot")) {
       appendDimRows(body, v, SIGNAL_NOISE_DIMS, "noise");
     }
 
     const account = v.signals?.account;
-    if (account && (account.followers != null || account.following != null || account.tweets != null)) {
+    if (
+      account &&
+      (account.name ||
+        account.handle ||
+        account.followers != null ||
+        account.following != null ||
+        account.tweets != null)
+    ) {
       const acct = document.createElement("div");
       acct.className = "acct";
       const bits = [];
+      if (account.name) bits.push(account.name);
       if (account.handle) bits.push("@" + String(account.handle).replace(/^@/, ""));
       if (account.followers != null) bits.push(`${account.followers} followers`);
       if (account.following != null) bits.push(`${account.following} following`);

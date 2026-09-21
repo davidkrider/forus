@@ -7,10 +7,12 @@ Context for an AI pair-programmer (Cursor, Claude Code, etc.) working on this pr
 A Chrome (MV3) browser extension that filters **noise** on X (Twitter) —
 engineered packaging and empty posts — while deliberately **never hiding real
 contribution**, even when that contribution is blunt, terse, sarcastic, or harshly
-worded. Each post is scored 0–3 on three independent scales: **payload** (contribution)
-vs **hijack** (engineered outrage/recruitment) and **vacuity** (no thought / tabloid-empty).
-Keep if payload ≥ the keep line; hide only if payload is below that **and**
-max(hijack, vacuity, bot) clears the hide floor.
+worded. Each post is scored 0–3 on four independent Jev scales: **payload** (contribution)
+vs **hijack** (engineered outrage/recruitment), **vacuity** (no thought / tabloid-empty),
+and **persona** (how costume-like or controversial the account identity is). A local
+**bot** prior from follow/tweet stats also counts as noise. Keep if payload ≥ the keep
+line; hide only if payload is below that **and** max(hijack, vacuity, persona, bot)
+clears the hide floor.
 
 The backend is a typed decision model, not a chat LLM. **Jev** (TypeSafe cloud) or
 **Laya** ([laya-mlx](https://github.com/mizorewww/laya-mlx) on Apple Silicon). Same
@@ -28,7 +30,7 @@ timeline. When tuning, optimize for **precision against false positives on value
 not for hiding more. The rubric encodes this; see `lib/rubric.js`. Hide rule:
 
 `hide = payload < minValueToKeep AND noise ≥ minNoiseToHide` (defaults 2 and 2),
-where noise is max(hijack, vacuity, bot).
+where noise is max(hijack, vacuity, persona, bot).
 
 ## Architecture
 
@@ -49,7 +51,8 @@ page-hook.js (MAIN world) harvests timeline GraphQL → postMessage → content.
 - **background.js** — the only place with the API key. Checks the cache, batches misses into
   one System One call (one post at a time for local Laya), stores results, returns `{id: verdict}`.
   Also serves the popup's "test".
-- **lib/systemone.js** — TypeSafe Jev or local Laya-MLX. Three Score questions per post.
+- **lib/systemone.js** — TypeSafe Jev or local Laya-MLX. Four Score questions per post
+  (payload, hijack, vacuity, persona). Local bot overlay after answers.
 - **scripts/laya_server.py** — wraps `laya-mlx` behind `POST /v1/systemone`.
 - **lib/rubric.js** — rubric, score questions, few-shot examples. The file you'll edit most.
 - **lib/cache.js** — in-memory LRU keyed on a hash of post text (X re-renders the same
@@ -67,7 +70,7 @@ page-hook.js (MAIN world) harvests timeline GraphQL → postMessage → content.
 | `background.js` | Cache + batch + System One dispatch; holds the key |
 | `lib/config.js` | Defaults + `chrome.storage.local` helpers |
 | `lib/rubric.js` | Score questions, Jev rubric, few-shot examples |
-| `lib/signals.js` | Bot-shaped prior from follower/following/volume/age |
+| `lib/signals.js` | Bot-shaped prior from follower/following/volume/age; compact name/handle/bio for Jev |
 | `lib/cache.js` | LRU text→verdict cache + FNV-1a hash |
 | `lib/systemone.js` | Jev cloud + local Laya client |
 | `scripts/laya_server.py` | Local laya-mlx HTTP wrapper |
@@ -85,7 +88,8 @@ page-hook.js (MAIN world) harvests timeline GraphQL → postMessage → content.
 
 Jev lives at `https://api.typesafe.ai/v1/systemone` (model `jev-1.13.0`). Local Laya
 is [laya-mlx](https://github.com/mizorewww/laya-mlx) served by `scripts/laya_server.py`
-at `http://127.0.0.1:8765/v1/systemone`. Each post is three Score questions. Built-in
+at `http://127.0.0.1:8765/v1/systemone`. Each post is four Score questions (payload,
+hijack, vacuity, persona). Built-in
 few-shots live in `lib/rubric.js` (`FEW_SHOT`). English Laya is 512-token context, so
 local calls send one post at a time.
 
@@ -123,6 +127,7 @@ do not do that. X does not expose how many people blocked or muted an account.
 - No build step, no dependencies — load-unpacked must keep working.
 - Credentials live only in `background.js` / `chrome.storage`. Never pass the API key to
   the content script or into the page.
-- Keep the three score dimensions in sync across `lib/rubric.js` (`SCORE_DIMS` /
+- Keep the four Jev score dimensions in sync across `lib/rubric.js` (`SCORE_DIMS` /
   `SCORE_QUESTIONS`), `lib/systemone.js`, and the popup sliders (`minValueToKeep` /
   `minNoiseToHide`). Local `bot` noise from `lib/signals.js` is not a Jev question.
+  Name / handle / bio are scored by Jev as `persona`, not by pattern lists.
