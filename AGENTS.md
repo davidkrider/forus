@@ -46,8 +46,9 @@ page-hook.js (MAIN world) harvests timeline GraphQL → postMessage → content.
   extracts post text via `data-testid` selectors, batches new posts, and collapses/blurs
   the ones the verdict says to hide (with a "Show post" reveal). Also hosts the activity
   panel. Holds **no credentials**.
-- **page-hook.js** — MAIN-world fetch/XHR hook. Reads User counts and Community Notes
-  from timeline JSON X already loaded. No extra profile or About-this-account calls.
+- **page-hook.js** — MAIN-world fetch/XHR hook. Reads User counts, whether you
+  follow the author, and Community Notes from timeline JSON X already loaded.
+  No extra profile, following-list, or About-this-account calls.
 - **background.js** — the only place with the API key. Checks the cache, batches misses into
   one System One call (one post at a time for local Laya), stores results, returns `{id: verdict}`.
   Also serves the popup's "test".
@@ -119,6 +120,8 @@ local calls send one post at a time.
 Named entity / topic mutes (Kardashians, etc.) stay on **X's muted words**. ForUs does
 not duplicate that denylist. "Account based in" needs a per-account About fetch; we
 do not do that. X does not expose how many people blocked or muted an account.
+Whether **you follow** the author is already on the timeline User object
+(`relationship_perspectives.following`); we do not fetch your following list.
 
 ## Conventions
 

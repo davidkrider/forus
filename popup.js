@@ -17,6 +17,7 @@ const els = {
   showPanel: $("#showPanel"),
   useAccountSignals: $("#useAccountSignals"),
   useCommunityNotes: $("#useCommunityNotes"),
+  lenientOnFollows: $("#lenientOnFollows"),
   save: $("#save"),
   test: $("#test"),
   status: $("#status")
@@ -45,6 +46,7 @@ function render() {
   els.showPanel.checked = config.showPanel;
   els.useAccountSignals.checked = config.useAccountSignals !== false;
   els.useCommunityNotes.checked = config.useCommunityNotes !== false;
+  els.lenientOnFollows.checked = config.lenientOnFollows !== false;
   applyBackendFields();
 }
 
@@ -59,6 +61,7 @@ function collect() {
   config.showPanel = els.showPanel.checked;
   config.useAccountSignals = els.useAccountSignals.checked;
   config.useCommunityNotes = els.useCommunityNotes.checked;
+  config.lenientOnFollows = els.lenientOnFollows.checked;
 }
 
 function setStatus(msg, kind = "") {

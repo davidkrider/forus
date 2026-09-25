@@ -30,7 +30,8 @@
     minNoiseToHide: 2,
     showPanel: true,
     useAccountSignals: true,
-    useCommunityNotes: true
+    useCommunityNotes: true,
+    lenientOnFollows: true
   };
 
   function applyConfig(c) {
@@ -41,10 +42,11 @@
     settings.showPanel = c.showPanel ?? settings.showPanel;
     settings.useAccountSignals = c.useAccountSignals ?? settings.useAccountSignals;
     settings.useCommunityNotes = c.useCommunityNotes ?? settings.useCommunityNotes;
+    settings.lenientOnFollows = c.lenientOnFollows ?? settings.lenientOnFollows;
     panel.setVisible(settings.showPanel);
     panel.setPaused(!settings.enabled);
     for (const v of verdictById.values()) {
-      applyBotPrior(v, settings.useAccountSignals ? v.signals?.account : null);
+      applyBotPrior(v, v.signals?.account);
     }
     if (!settings.enabled) {
       revealAll();
@@ -445,8 +447,41 @@
       name: name || "Unknown",
       handle,
       avatar: avatarImg?.currentSrc || avatarImg?.src || "",
-      bio: bioNode ? bioNode.innerText.trim() : null
+      bio: bioNode ? bioNode.innerText.trim() : null,
+      iFollow: followButtonState(article)
     };
+  }
+
+  function followButtonState(article) {
+    const nodes = article.querySelectorAll("[aria-label]");
+    for (const n of nodes) {
+      if (n.closest('article[data-testid="tweet"]') !== article) continue;
+      const label = String(n.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim();
+      if (/^following @/i.test(label) || /^unfollow @/i.test(label)) return true;
+      if (/^follow @/i.test(label) || /^follow back @/i.test(label)) return false;
+    }
+    return null;
+  }
+
+  function onFollowingTimeline() {
+    const tab = document.querySelector('[role="tab"][aria-selected="true"]');
+    if (!tab) return false;
+    const label = (tab.getAttribute("aria-label") || tab.textContent || "")
+      .replace(/\s+/g, " ")
+      .trim();
+    return /^following$/i.test(label);
+  }
+
+  function isNestedQuote(article) {
+    return !!article.parentElement?.closest('article[data-testid="tweet"]');
+  }
+
+  function inferIFollow(article, account) {
+    if (typeof account?.iFollow === "boolean") return account.iFollow;
+    const btn = followButtonState(article);
+    if (typeof btn === "boolean") return btn;
+    if (!isNestedQuote(article) && onFollowingTimeline()) return true;
+    return null;
   }
 
   const usersByHandle = new Map();
@@ -521,6 +556,13 @@
     if (!sigAccount && !handle && !name) return null;
     const out = { ...(sigAccount || {}), handle, name };
     if (bio != null) out.bio = bio;
+    const iFollow =
+      typeof sigAccount?.iFollow === "boolean"
+        ? sigAccount.iFollow
+        : typeof author?.iFollow === "boolean"
+          ? author.iFollow
+          : sigAccount?.iFollow;
+    if (typeof iFollow === "boolean") out.iFollow = iFollow;
     return out;
   }
 
@@ -538,6 +580,9 @@
     if (!v) return v;
     v.signals = v.signals || {};
     v.signals.account = account || v.signals.account || null;
+    if (typeof v.signals.account?.iFollow === "boolean") {
+      v.signals.iFollow = v.signals.account.iFollow;
+    }
     if (!settings.useAccountSignals) {
       if (v.scores) {
         delete v.scores.bot;
@@ -574,6 +619,8 @@
     if (tweetId) article.setAttribute("data-rf-tweet", tweetId);
     const sig = lookupSignals(tweetId, handle);
     const account = mergeAccount(sig.account, author);
+    const iFollow = inferIFollow(article, account);
+    if (account && typeof iFollow === "boolean") account.iFollow = iFollow;
     const domNote = extractDomNote(article);
     let note = sig.note;
     if (domNote && (!note || (domNote.status === "shown" && note.status !== "shown"))) {
@@ -585,6 +632,7 @@
       tweetId,
       handle,
       account: settings.useAccountSignals ? account : null,
+      iFollow: account?.iFollow === true,
       note: settings.useCommunityNotes ? note : null,
       useAccountSignals: settings.useAccountSignals,
       useCommunityNotes: settings.useCommunityNotes
@@ -603,7 +651,8 @@
         followers: u.followers ?? prev.followers ?? null,
         following: u.following ?? prev.following ?? null,
         tweets: u.tweets ?? prev.tweets ?? null,
-        createdAt: u.createdAt || prev.createdAt || null
+        createdAt: u.createdAt || prev.createdAt || null,
+        iFollow: typeof u.iFollow === "boolean" ? u.iFollow : prev.iFollow
       });
     }
     for (const t of data.tweets || []) {
@@ -636,8 +685,11 @@
       const author = extractAuthor(el);
       const sig = lookupSignals(tweetId, author.handle);
       const account = mergeAccount(sig.account, author);
+      const iFollow = inferIFollow(el, account);
+      if (account && typeof iFollow === "boolean") account.iFollow = iFollow;
       const prevBot = v.scores?.bot;
       const prevNote = v.signals?.note?.text || v.signals?.note?.status || "";
+      const prevFollow = v.signals?.iFollow === true;
       const hadBio = Boolean(String(v.signals?.account?.bio || "").trim());
       applyBotPrior(v, account);
       if (settings.useCommunityNotes && sig.note) {
@@ -646,10 +698,11 @@
       }
       const nextBot = v.scores?.bot;
       const nextNote = v.signals?.note?.text || v.signals?.note?.status || "";
+      const nextFollow = v.signals?.iFollow === true;
       const hasBio = Boolean(String(account?.bio || "").trim());
       if (settings.useAccountSignals && !hadBio && hasBio) {
         requeue(id, el);
-      } else if (prevBot !== nextBot || prevNote !== nextNote) {
+      } else if (prevBot !== nextBot || prevNote !== nextNote || prevFollow !== nextFollow) {
         applyOne(id, v);
       }
     }
@@ -754,8 +807,18 @@
     return dimMax(v?.scores, VALUE_DIMS);
   }
 
-  function noiseOf(v) {
+  function iFollowOf(v) {
+    return v?.signals?.iFollow === true || v?.signals?.account?.iFollow === true;
+  }
+
+  function rawNoiseOf(v) {
     return dimMax(v?.scores, [...NOISE_DIMS, ...SIGNAL_NOISE_DIMS]);
+  }
+
+  function noiseOf(v) {
+    const raw = rawNoiseOf(v);
+    if (settings.lenientOnFollows && iFollowOf(v)) return Math.max(0, raw - 1);
+    return raw;
   }
 
   function formatScore(n) {
@@ -1060,6 +1123,8 @@
     const hidden = shouldHide(v);
     const value = valueOf(v);
     const noise = noiseOf(v);
+    const rawNoise = rawNoiseOf(v);
+    const followed = settings.lenientOnFollows && iFollowOf(v);
 
     const head = document.createElement("div");
     head.className = "head";
@@ -1073,9 +1138,17 @@
 
     const rule = document.createElement("div");
     rule.className = "rule";
-    rule.textContent = hidden
-      ? `payload ${formatScore(value)} is below the keep line (${settings.minValueToKeep}) and noise ${formatScore(noise)} meets the hide floor (${settings.minNoiseToHide}).`
-      : `payload ${formatScore(value)} meets the keep line (${settings.minValueToKeep}).`;
+    if (hidden) {
+      rule.textContent = followed
+        ? `payload ${formatScore(value)} is below the keep line (${settings.minValueToKeep}) and noise ${formatScore(noise)} (${formatScore(rawNoise)} − 1 following) meets the hide floor (${settings.minNoiseToHide}).`
+        : `payload ${formatScore(value)} is below the keep line (${settings.minValueToKeep}) and noise ${formatScore(noise)} meets the hide floor (${settings.minNoiseToHide}).`;
+    } else if (value >= settings.minValueToKeep) {
+      rule.textContent = `payload ${formatScore(value)} meets the keep line (${settings.minValueToKeep}).`;
+    } else if (followed) {
+      rule.textContent = `you follow this account: noise ${formatScore(rawNoise)} − 1 = ${formatScore(noise)}, below the hide floor (${settings.minNoiseToHide}).`;
+    } else {
+      rule.textContent = `noise ${formatScore(noise)} is below the hide floor (${settings.minNoiseToHide}).`;
+    }
 
     const body = document.createElement("div");
     body.className = "body";
@@ -1091,6 +1164,21 @@
     appendDimRows(body, v, NOISE_DIMS.filter((d) => d !== "persona" || v.scores?.persona != null), "noise");
     if (v.scores && Object.prototype.hasOwnProperty.call(v.scores, "bot")) {
       appendDimRows(body, v, SIGNAL_NOISE_DIMS, "noise");
+    }
+    if (followed) {
+      const slack = document.createElement("div");
+      slack.className = "row noise";
+      const name = document.createElement("span");
+      name.className = "name";
+      name.textContent = "following";
+      const n = document.createElement("span");
+      n.className = "n";
+      n.textContent = "−1";
+      const why = document.createElement("div");
+      why.className = "why";
+      why.textContent = "You follow this account. −1 on the noise used to hide.";
+      slack.append(name, n, why);
+      body.append(slack);
     }
 
     const account = v.signals?.account;
@@ -1110,6 +1198,7 @@
       if (account.followers != null) bits.push(`${account.followers} followers`);
       if (account.following != null) bits.push(`${account.following} following`);
       if (account.tweets != null) bits.push(`${account.tweets} tweets`);
+      if (account.iFollow === true) bits.push("you follow");
       acct.textContent = bits.join(" · ");
       body.append(acct);
     }
@@ -1234,6 +1323,16 @@
   function applyVerdicts(verdicts) {
     for (const id of Object.keys(verdicts)) {
       const v = verdicts[id];
+      const el = elById.get(id);
+      if (el?.isConnected) {
+        const author = extractAuthor(el);
+        const tweetId = el.getAttribute("data-rf-tweet") || extractTweetId(el);
+        const sig = lookupSignals(tweetId, author.handle);
+        const account = mergeAccount(sig.account, author);
+        const iFollow = inferIFollow(el, account);
+        if (account && typeof iFollow === "boolean") account.iFollow = iFollow;
+        applyBotPrior(v, account);
+      }
       verdictById.set(id, v);
       applyOne(id, v);
       panel.count(shouldHide(v));

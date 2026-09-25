@@ -46,6 +46,13 @@
     const following = num(rc.following, rc.follow_count, legacy.friends_count);
     const tweetsN = num(tc.tweets, tc.tweet_count, legacy.statuses_count);
     const createdAt = core.created_at || core.createdAt || legacy.created_at || null;
+    const rp = node.relationship_perspectives || node.relationshipPerspectives || {};
+    const iFollow =
+      rp.following === true || rp.following === false
+        ? rp.following
+        : legacy.following === true || legacy.following === false
+          ? legacy.following
+          : null;
     return {
       handle,
       name,
@@ -54,7 +61,8 @@
       followers,
       following,
       tweets: tweetsN,
-      createdAt: createdAt ? String(createdAt) : null
+      createdAt: createdAt ? String(createdAt) : null,
+      iFollow
     };
   }
 
@@ -112,7 +120,8 @@
       followers: u.followers ?? prev.followers ?? null,
       following: u.following ?? prev.following ?? null,
       tweets: u.tweets ?? prev.tweets ?? null,
-      createdAt: u.createdAt || prev.createdAt || null
+      createdAt: u.createdAt || prev.createdAt || null,
+      iFollow: typeof u.iFollow === "boolean" ? u.iFollow : prev.iFollow
     };
     if (merged.handle) {
       users.set(merged.handle, merged);
