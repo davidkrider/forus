@@ -14,6 +14,22 @@ Keep if `payload ≥ 2`. Hide only if payload is below that **and** `max(hijack,
 Accounts you follow get −1 on that noise (local overlay; hijack 3 still hides).
 A sharply worded correct rebuttal stays visible. An empty sneer does not.
 
+Every scored post gets a small `v… n…` chip (payload and noise) next to X's Grok
+button. Click it for the breakdown: each scale's score, the rubric line it landed
+on, Jev's probability spread, and any local adjustments such as following.
+
+<p align="center">
+  <img src="docs/Scoring.png" alt="Score breakdown popover: payload 1.9 keeps the post; hijack, vacuity, persona, and bot rows, with a −1 for an account you follow" width="720">
+</p>
+
+Friendly reply-harvest counts as noise too. An open-ended "what's your greatest X?"
+prompt has no point of its own (payload 0) and exists to farm comments (hijack 2),
+so it hides:
+
+<p align="center">
+  <img src="docs/Engagement%20Farming.png" alt="An open-ended 'What is your greatest gaming disappointment of the last decade?' post scored v0 n2" width="480">
+</p>
+
 Named mutes (people or words you never want, even if they cured hunger) stay on **X**.
 ForUs additionally sends display name, handle, and bio to Jev for the persona score,
 uses follower/following ratio, tweet volume, and join date from the
@@ -43,12 +59,20 @@ Not affiliated with X or Twitter. Personal tool, not on the Chrome Web Store.
 
 Hidden posts collapse to the author's identity plus **Show post**.
 
+While you tune, a **ForUs** activity panel in the bottom-right logs each verdict
+with its scores and whether it came from the model or the cache. Click a row to
+jump to that post. Turn the panel off in the popup once you trust the filter.
+
+<p align="center">
+  <img src="docs/Running%20Monitor.png" alt="ForUs activity panel: 1167 seen, 251 hidden, 916 kept, with a log of KEEP and HIDE verdicts and their payload and noise scores" width="360">
+</p>
+
 ## Config
 
 | Control | Default | Meaning |
 |---------|---------|---------|
 | Keep if payload ≥ | 2 | Contribution: a real point, question, or joke |
-| Hide if noise ≥ | 2 | Highest of hijack / vacuity / persona / bot-shaped |
+| Hide if noise ≥ | 2 | Highest of hijack / vacuity / persona / bot-shaped / region |
 | Account signals | on | Jev scores name/handle/bio for persona; local follows≈followers firehose; never overrides payload |
 | Lenient on accounts I follow | on | Timeline already says whether you follow the author; −1 noise for hide; no following-list fetch |
 | Regions to filter | empty | Region noise: X’s “Account based in” match = 3, self-typed profile location match = 2; a real point still keeps |
