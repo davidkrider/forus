@@ -56,8 +56,11 @@ h1 {
 }
 
 select,
+textarea,
 input[type="text"],
 input[type="password"] {
+  box-sizing: border-box;
+  resize: vertical;
   width: 100%;
   background: var(--bg);
   color: var(--ink);

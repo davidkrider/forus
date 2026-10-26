@@ -68,6 +68,14 @@
     </section>
 
     <section class="block">
+      <label for="blockedRegions" class="eyebrow">Regions to filter</label>
+      <textarea id="blockedRegions" rows="2" spellcheck="false" placeholder="One per line or comma-separated, e.g. Russia, Nigeria"></textarea>
+      <p class="hint">Counts as noise, so a real point still keeps. X’s “Account based in” match scores 3; a self-typed profile location match scores 2 (accounts you follow get −1, so that one keeps).</p>
+      <label class="check"><input type="checkbox" id="fetchBasedIn" /> Look up “Account based in”</label>
+      <p class="hint">Off: only uses “based in” when X loads it itself (for example, when you open an account’s About sheet), plus profile location. On: one extra request to X per new author, throttled (one every 2.5 s, at most 120 an hour), cached 30 days, and paused if X rate-limits. It runs as your logged-in account.</p>
+    </section>
+
+    <section class="block">
       <label class="check"><input type="checkbox" id="useCommunityNotes" /> Community Notes</label>
       <p class="hint">Shown notes go to the classifier as context. Pending notes (if you're a contributor) appear on the score badge only — they do not hide a post.</p>
     </section>

@@ -1,6 +1,7 @@
 // page-hook.js  (MAIN world — runs in X's page JS, document_start)
-// Taps fetch/XHR that X already makes for the timeline. No extra API calls.
-// Posts compact user + Community Note fields to the isolated content script.
+// Taps fetch/XHR that X already makes for the timeline. Posts compact user +
+// Community Note fields to the isolated content script. The only request it
+// makes on its own is the opt-in "Account based in" lookup below.
 
 (() => {
   const SOURCE = "forus-hook";
@@ -46,6 +47,16 @@
     const following = num(rc.following, rc.follow_count, legacy.friends_count);
     const tweetsN = num(tc.tweets, tc.tweet_count, legacy.statuses_count);
     const createdAt = core.created_at || core.createdAt || legacy.created_at || null;
+    const loc = String(
+      (typeof node.location === "object" ? node.location?.location : "") ||
+        legacy.location ||
+        ""
+    ).trim();
+    const about = node.about_profile || node.aboutProfile || null;
+    const basedIn =
+      about && typeof about === "object"
+        ? String(about.account_based_in || about.accountBasedIn || "").trim()
+        : null;
     const rp = node.relationship_perspectives || node.relationshipPerspectives || {};
     const iFollow =
       rp.following === true || rp.following === false
@@ -62,7 +73,9 @@
       following,
       tweets: tweetsN,
       createdAt: createdAt ? String(createdAt) : null,
-      iFollow
+      iFollow,
+      location: loc.slice(0, 80),
+      basedIn
     };
   }
 
@@ -121,7 +134,9 @@
       following: u.following ?? prev.following ?? null,
       tweets: u.tweets ?? prev.tweets ?? null,
       createdAt: u.createdAt || prev.createdAt || null,
-      iFollow: typeof u.iFollow === "boolean" ? u.iFollow : prev.iFollow
+      iFollow: typeof u.iFollow === "boolean" ? u.iFollow : prev.iFollow,
+      location: u.location || prev.location || "",
+      basedIn: typeof u.basedIn === "string" ? u.basedIn : prev.basedIn ?? null
     };
     if (merged.handle) {
       users.set(merged.handle, merged);
@@ -185,14 +200,138 @@
     return /\/i\/api\/graphql\//.test(url) || /\/graphql\//.test(url);
   }
 
+  // --- "Account based in" lookups (opt-in; content.js decides which handles) --
+  // Reuses the headers X's own client sends, so the request looks like opening
+  // the About sheet. Throttled hard; stops on 429.
+
+  const FALLBACK_ABOUT_IDS = ["zs_jFPFT78rBpXv9Z3U2YQ", "XRqGa7EeokUU5kppkh13EA"];
+  const ABOUT_GAP_MS = 2500;
+  const ABOUT_PER_HOUR = 120;
+  const ABOUT_BACKOFF_MS = 15 * 60 * 1000;
+  const xHeaders = {};
+  let aboutQueryId = "";
+  let origFetch = null;
+  const aboutQueue = [];
+  const aboutQueued = new Set();
+  const aboutSent = [];
+  let aboutTimer = null;
+  let aboutPausedUntil = 0;
+
+  function learnFromRequest(url, headers) {
+    const m = String(url || "").match(/\/graphql\/([A-Za-z0-9_-]+)\/AboutAccountQuery/);
+    if (m) aboutQueryId = m[1];
+    if (!headers) return;
+    const get = (k) =>
+      typeof headers.get === "function" ? headers.get(k) : headers[k] ?? headers[k.toLowerCase()];
+    for (const k of [
+      "authorization",
+      "x-csrf-token",
+      "x-twitter-auth-type",
+      "x-twitter-active-user",
+      "x-twitter-client-language"
+    ]) {
+      const v = get(k);
+      if (v) xHeaders[k] = String(v);
+    }
+  }
+
+  function csrfFromCookie() {
+    const m = document.cookie.match(/(?:^|;\s*)ct0=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : "";
+  }
+
+  function postAbout(handle, basedIn, status) {
+    window.postMessage(
+      { source: SOURCE, about: [{ handle, basedIn: basedIn || "", status }] },
+      window.location.origin
+    );
+  }
+
+  function scheduleAbout() {
+    if (aboutTimer || !aboutQueue.length) return;
+    const wait = Math.max(ABOUT_GAP_MS, aboutPausedUntil - Date.now());
+    aboutTimer = setTimeout(runAbout, wait);
+  }
+
+  async function runAbout() {
+    aboutTimer = null;
+    if (!aboutQueue.length) return;
+    const now = Date.now();
+    if (now < aboutPausedUntil) return scheduleAbout();
+    while (aboutSent.length && now - aboutSent[0] > 3600000) aboutSent.shift();
+    if (aboutSent.length >= ABOUT_PER_HOUR) {
+      aboutPausedUntil = aboutSent[0] + 3600000;
+      window.postMessage({ source: SOURCE, aboutStatus: "hourly-cap" }, window.location.origin);
+      return scheduleAbout();
+    }
+    if (!xHeaders.authorization || document.hidden) return scheduleAbout();
+
+    const handle = aboutQueue.shift();
+    aboutQueued.delete(handle);
+    aboutSent.push(now);
+    const headers = {
+      ...xHeaders,
+      "x-csrf-token": csrfFromCookie() || xHeaders["x-csrf-token"] || "",
+      "content-type": "application/json"
+    };
+    const ids = [...new Set([aboutQueryId, ...FALLBACK_ABOUT_IDS].filter(Boolean))];
+    const vars = encodeURIComponent(JSON.stringify({ screenName: handle }));
+    let done = false;
+    for (const id of ids) {
+      try {
+        const res = await origFetch.call(
+          window,
+          `/i/api/graphql/${id}/AboutAccountQuery?variables=${vars}`,
+          { headers, credentials: "include" }
+        );
+        if (res.status === 404) continue;
+        if (res.status === 429) {
+          aboutPausedUntil = Date.now() + ABOUT_BACKOFF_MS;
+          aboutQueue.unshift(handle);
+          aboutQueued.add(handle);
+          window.postMessage({ source: SOURCE, aboutStatus: "rate-limited" }, window.location.origin);
+          done = true;
+          break;
+        }
+        if (!res.ok) break;
+        const data = await res.json();
+        aboutQueryId = id;
+        const about = data?.data?.user_result_by_screen_name?.result?.about_profile;
+        postAbout(handle, about?.account_based_in, about ? "ok" : "none");
+        done = true;
+        break;
+      } catch (_) {
+        break;
+      }
+    }
+    if (!done) postAbout(handle, "", "error");
+    scheduleAbout();
+  }
+
+  window.addEventListener("message", (e) => {
+    if (e.source !== window) return;
+    const d = e.data;
+    if (d?.source !== "forus-content" || d.type !== "about-lookup") return;
+    for (const raw of d.handles || []) {
+      const h = asHandle(raw);
+      if (!h || aboutQueued.has(h)) continue;
+      aboutQueued.add(h);
+      aboutQueue.push(h);
+    }
+    while (aboutQueue.length > 200) aboutQueued.delete(aboutQueue.shift());
+    scheduleAbout();
+  });
+
   function hookFetch() {
     const orig = window.fetch;
     if (typeof orig !== "function") return;
+    origFetch = orig;
     window.fetch = function (input, init) {
       const p = orig.apply(this, arguments);
       try {
         const url = typeof input === "string" ? input : input && input.url;
         if (!interestingUrl(url)) return p;
+        learnFromRequest(url, init?.headers || (typeof input === "object" ? input.headers : null));
         p.then((res) => {
           if (!res || !res.ok) return;
           res
@@ -209,14 +348,23 @@
   function hookXhr() {
     const open = XMLHttpRequest.prototype.open;
     const send = XMLHttpRequest.prototype.send;
+    const setHeader = XMLHttpRequest.prototype.setRequestHeader;
     XMLHttpRequest.prototype.open = function (method, url) {
       try {
         this._forusUrl = url;
+        this._forusHeaders = {};
       } catch (_) {}
       return open.apply(this, arguments);
     };
+    XMLHttpRequest.prototype.setRequestHeader = function (k, v) {
+      try {
+        if (this._forusHeaders) this._forusHeaders[String(k).toLowerCase()] = v;
+      } catch (_) {}
+      return setHeader.apply(this, arguments);
+    };
     XMLHttpRequest.prototype.send = function () {
       try {
+        if (interestingUrl(this._forusUrl)) learnFromRequest(this._forusUrl, this._forusHeaders);
         this.addEventListener("load", function () {
           if (!interestingUrl(this._forusUrl)) return;
           try {

@@ -10,7 +10,7 @@ Each post is scored 0–3 on four independent Jev scales:
 - **Vacuity:** no thought, slop, or tabloid-empty celebrity chatter
 - **Persona:** how costume-like or controversial the account identity (name, handle, bio) is
 
-Keep if `payload ≥ 2`. Hide only if payload is below that **and** `max(hijack, vacuity, persona, bot) ≥ 2`.
+Keep if `payload ≥ 2`. Hide only if payload is below that **and** `max(hijack, vacuity, persona, bot, region) ≥ 2`.
 Accounts you follow get −1 on that noise (local overlay; hijack 3 still hides).
 A sharply worded correct rebuttal stays visible. An empty sneer does not.
 
@@ -32,7 +32,7 @@ Not affiliated with X or Twitter. Personal tool, not on the Chrome Web Store.
 
 - The **API key never leaves this device** except as a `Bearer` header to TypeSafe when you use cloud Jev. It is stored in `chrome.storage.local`, not in this repo, and is never injected into the X page.
 - Classification sends **post text** plus public account fields already on the tweet (name, handle, bio, follow counts) to Jev or to a **local** Laya server at `127.0.0.1`.
-- The page hook only reads GraphQL **your browser already loaded** for the timeline. No extra profile, following-list, or About-this-account requests.
+- The page hook only reads GraphQL **your browser already loaded** for the timeline. No extra profile or following-list requests. The one exception is opt-in: **Look up “Account based in”** sends one throttled, cached About-this-account request to X per new author, as your logged-in account. It is off by default and does nothing until you list at least one region.
 
 ## Install (unpacked)
 
@@ -51,6 +51,8 @@ Hidden posts collapse to the author's identity plus **Show post**.
 | Hide if noise ≥ | 2 | Highest of hijack / vacuity / persona / bot-shaped |
 | Account signals | on | Jev scores name/handle/bio for persona; local follows≈followers firehose; never overrides payload |
 | Lenient on accounts I follow | on | Timeline already says whether you follow the author; −1 noise for hide; no following-list fetch |
+| Regions to filter | empty | Region noise: X’s “Account based in” match = 3, self-typed profile location match = 2; a real point still keeps |
+| Look up “Account based in” | off | One extra request per new author (≤ 120/hour, cached 30 days, pauses on rate limit). Off = only when X loads it itself |
 | Community Notes | on | Shown note text is classifier context; pending notes are badge-only |
 
 Your API key (cloud only) is stored in `chrome.storage.local` on this device. It never goes into the page.

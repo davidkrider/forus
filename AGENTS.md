@@ -11,7 +11,7 @@ worded. Each post is scored 0–3 on four independent Jev scales: **payload** (c
 vs **hijack** (engineered outrage/recruitment), **vacuity** (no thought / tabloid-empty),
 and **persona** (how costume-like or controversial the account identity is). A local
 **bot** prior from follow/tweet stats also counts as noise. Keep if payload ≥ the keep
-line; hide only if payload is below that **and** max(hijack, vacuity, persona, bot)
+line; hide only if payload is below that **and** max(hijack, vacuity, persona, bot, region)
 clears the hide floor.
 
 The backend is a typed decision model, not a chat LLM. **Jev** (TypeSafe cloud) or
@@ -30,7 +30,7 @@ timeline. When tuning, optimize for **precision against false positives on value
 not for hiding more. The rubric encodes this; see `lib/rubric.js`. Hide rule:
 
 `hide = payload < minValueToKeep AND noise ≥ minNoiseToHide` (defaults 2 and 2),
-where noise is max(hijack, vacuity, persona, bot).
+where noise is max(hijack, vacuity, persona, bot, region).
 
 ## Architecture
 
@@ -47,8 +47,9 @@ page-hook.js (MAIN world) harvests timeline GraphQL → postMessage → content.
   the ones the verdict says to hide (with a "Show post" reveal). Also hosts the activity
   panel. Holds **no credentials**.
 - **page-hook.js** — MAIN-world fetch/XHR hook. Reads User counts, whether you
-  follow the author, and Community Notes from timeline JSON X already loaded.
-  No extra profile, following-list, or About-this-account calls.
+  follow the author, profile location, and Community Notes from timeline JSON X
+  already loaded. No extra profile or following-list calls. The only request it
+  originates is the opt-in, throttled "Account based in" lookup.
 - **background.js** — the only place with the API key. Checks the cache, batches misses into
   one System One call (one post at a time for local Laya), stores results, returns `{id: verdict}`.
   Also serves the popup's "test".
@@ -118,8 +119,18 @@ local calls send one post at a time.
    `safari-web-extension-converter` at the end.
 
 Named entity / topic mutes (Kardashians, etc.) stay on **X's muted words**. ForUs does
-not duplicate that denylist. "Account based in" needs a per-account About fetch; we
-do not do that. X does not expose how many people blocked or muted an account.
+not duplicate that denylist. X does not expose how many people blocked or muted an account.
+
+**Region filter.** `blockedRegions` is a local `region` noise score, overlaid in
+`content.js` (not a Jev question, so editing the list re-applies without
+reclassifying). Two sources: profile `location` (self-typed, on the timeline User,
+score 2) and "Account based in" (`about_profile.account_based_in`, score 3).
+"Based in" is **not** on the timeline User. `page-hook.js` reads it passively when X
+loads `AboutAccountQuery` itself. With `fetchBasedIn` on, it also sends that query
+per new author using X's own captured headers: one every 2.5 s, at most 120 an hour,
+15-minute backoff on 429, results cached 30 days in `chrome.storage.local`
+(`forusBasedIn`). The query id is learned from X's own traffic, with hardcoded
+fallbacks that will rot.
 Whether **you follow** the author is already on the timeline User object
 (`relationship_perspectives.following`); we do not fetch your following list.
 

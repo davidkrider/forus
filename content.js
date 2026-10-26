@@ -31,11 +31,20 @@
     showPanel: true,
     useAccountSignals: true,
     useCommunityNotes: true,
-    lenientOnFollows: true
+    lenientOnFollows: true,
+    blockedRegions: [],
+    fetchBasedIn: false
   };
+
+  function parseRegions(raw) {
+    const list = Array.isArray(raw) ? raw : String(raw || "").split(/[,\n]/);
+    return [...new Set(list.map(normPlace).filter(Boolean))];
+  }
 
   function applyConfig(c) {
     if (!c) return;
+    if (c.blockedRegions !== undefined) settings.blockedRegions = parseRegions(c.blockedRegions);
+    settings.fetchBasedIn = c.fetchBasedIn ?? settings.fetchBasedIn;
     settings.enabled = c.enabled ?? settings.enabled;
     settings.minValueToKeep = c.minValueToKeep ?? settings.minValueToKeep;
     settings.minNoiseToHide = c.minNoiseToHide ?? settings.minNoiseToHide;
@@ -46,7 +55,12 @@
     panel.setVisible(settings.showPanel);
     panel.setPaused(!settings.enabled);
     for (const v of verdictById.values()) {
-      applyBotPrior(v, v.signals?.account);
+      applyLocalSignals(v, v.signals?.account);
+    }
+    if (wantBasedIn()) {
+      for (const el of elById.values()) {
+        if (el?.isConnected) requestBasedIn(extractAuthor(el).handle);
+      }
     }
     if (!settings.enabled) {
       revealAll();
@@ -566,6 +580,109 @@
     return out;
   }
 
+  // --- Region ---------------------------------------------------------------
+  // "Account based in" comes from X's About-this-account data: either X loaded
+  // it on its own (About sheet) or the opt-in lookup in page-hook.js fetched it.
+  // Cached per handle in chrome.storage.local so each author is looked up once.
+
+  const BASED_IN_KEY = "forusBasedIn";
+  const BASED_IN_TTL = { ok: 30 * 86400000, none: 30 * 86400000, error: 86400000 };
+  const basedInCache = new Map(); // handle -> { v, s, t }
+  const basedInAsked = new Set();
+  const basedInPending = new Set();
+  let basedInSaveTimer = null;
+  let basedInSendTimer = null;
+
+  chrome.storage.local.get([BASED_IN_KEY], (res) => {
+    const now = Date.now();
+    for (const [h, rec] of Object.entries(res?.[BASED_IN_KEY] || {})) {
+      if (rec && now - rec.t < (BASED_IN_TTL[rec.s] || 0)) basedInCache.set(h, rec);
+    }
+  });
+
+  function saveBasedIn() {
+    if (basedInSaveTimer) return;
+    basedInSaveTimer = setTimeout(() => {
+      basedInSaveTimer = null;
+      const out = {};
+      for (const [h, rec] of basedInCache) out[h] = rec;
+      chrome.storage.local.set({ [BASED_IN_KEY]: out });
+    }, 2000);
+  }
+
+  function rememberBasedIn(handle, basedIn, status) {
+    const h = String(handle || "").replace(/^@/, "").toLowerCase();
+    if (!h) return;
+    basedInCache.set(h, { v: String(basedIn || ""), s: status || "ok", t: Date.now() });
+    saveBasedIn();
+  }
+
+  function basedInFor(handle) {
+    const h = String(handle || "").replace(/^@/, "").toLowerCase();
+    const rec = h && basedInCache.get(h);
+    return rec && rec.s !== "error" ? rec.v : null;
+  }
+
+  function wantBasedIn() {
+    return settings.enabled && settings.fetchBasedIn && settings.blockedRegions.length > 0;
+  }
+
+  function requestBasedIn(handle) {
+    if (!wantBasedIn()) return;
+    const h = String(handle || "").replace(/^@/, "").toLowerCase();
+    if (!h || basedInCache.has(h) || basedInAsked.has(h)) return;
+    if (usersByHandle.get(h)?.basedIn != null) return;
+    basedInAsked.add(h);
+    basedInPending.add(h);
+    if (basedInSendTimer) return;
+    basedInSendTimer = setTimeout(() => {
+      basedInSendTimer = null;
+      const handles = [...basedInPending];
+      basedInPending.clear();
+      window.postMessage(
+        { source: "forus-content", type: "about-lookup", handles },
+        window.location.origin
+      );
+    }, 1000);
+  }
+
+  function normPlace(s) {
+    return String(s || "")
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function placeHas(text, entry) {
+    if (!text || !entry) return false;
+    const esc = entry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(^|[^a-z0-9])${esc}($|[^a-z0-9])`).test(text);
+  }
+
+  function regionShape(account) {
+    const list = settings.blockedRegions;
+    if (!list.length || !account) return null;
+    const basedIn = account.basedIn ?? basedInFor(account.handle);
+    const based = normPlace(basedIn);
+    const loc = normPlace(account.location);
+    for (const e of list) {
+      if (placeHas(based, e)) return { score: 3, why: `Account based in ${basedIn} (matches “${e}”).` };
+    }
+    for (const e of list) {
+      if (placeHas(loc, e)) {
+        return { score: 2, why: `Profile location “${account.location}” (matches “${e}”).` };
+      }
+    }
+    const known = basedIn
+      ? `Based in ${basedIn}`
+      : account.location
+        ? `Location “${account.location}”`
+        : "No region known";
+    return { score: 0, why: `${known}. Not in your region list.` };
+  }
+
   function lookupSignals(tweetId, handle) {
     const key = String(handle || "")
       .replace(/^@/, "")
@@ -576,12 +693,23 @@
     return { account, note };
   }
 
-  function applyBotPrior(v, account) {
+  function applyLocalSignals(v, account) {
     if (!v) return v;
     v.signals = v.signals || {};
     v.signals.account = account || v.signals.account || null;
     if (typeof v.signals.account?.iFollow === "boolean") {
       v.signals.iFollow = v.signals.account.iFollow;
+    }
+    const region = regionShape(v.signals.account);
+    if (region) {
+      v.scores = { ...(v.scores || {}), region: region.score };
+      v.breakdown = {
+        ...(v.breakdown || {}),
+        region: { score: region.score, level: region.score, why: region.why }
+      };
+    } else {
+      if (v.scores) delete v.scores.region;
+      if (v.breakdown) delete v.breakdown.region;
     }
     if (!settings.useAccountSignals) {
       if (v.scores) {
@@ -652,8 +780,22 @@
         following: u.following ?? prev.following ?? null,
         tweets: u.tweets ?? prev.tweets ?? null,
         createdAt: u.createdAt || prev.createdAt || null,
-        iFollow: typeof u.iFollow === "boolean" ? u.iFollow : prev.iFollow
+        iFollow: typeof u.iFollow === "boolean" ? u.iFollow : prev.iFollow,
+        location: u.location || prev.location || "",
+        basedIn: typeof u.basedIn === "string" ? u.basedIn : prev.basedIn ?? null
       });
+      if (typeof u.basedIn === "string") rememberBasedIn(u.handle, u.basedIn, "ok");
+    }
+    for (const a of data.about || []) {
+      if (!a?.handle) continue;
+      rememberBasedIn(a.handle, a.basedIn, a.status);
+      const u = usersByHandle.get(a.handle);
+      if (u && a.status !== "error") u.basedIn = a.basedIn || "";
+    }
+    if (data.aboutStatus === "rate-limited") {
+      panel.error("X rate-limited “based in” lookups. Pausing them for 15 minutes.");
+    } else if (data.aboutStatus === "hourly-cap") {
+      panel.error("Hit the hourly cap on “based in” lookups. Resuming within the hour.");
     }
     for (const t of data.tweets || []) {
       if (!t?.tweetId) continue;
@@ -688,10 +830,11 @@
       const iFollow = inferIFollow(el, account);
       if (account && typeof iFollow === "boolean") account.iFollow = iFollow;
       const prevBot = v.scores?.bot;
+      const prevRegion = v.scores?.region;
       const prevNote = v.signals?.note?.text || v.signals?.note?.status || "";
       const prevFollow = v.signals?.iFollow === true;
       const hadBio = Boolean(String(v.signals?.account?.bio || "").trim());
-      applyBotPrior(v, account);
+      applyLocalSignals(v, account);
       if (settings.useCommunityNotes && sig.note) {
         v.signals = v.signals || {};
         v.signals.note = sig.note;
@@ -702,7 +845,12 @@
       const hasBio = Boolean(String(account?.bio || "").trim());
       if (settings.useAccountSignals && !hadBio && hasBio) {
         requeue(id, el);
-      } else if (prevBot !== nextBot || prevNote !== nextNote || prevFollow !== nextFollow) {
+      } else if (
+        prevBot !== nextBot ||
+        prevRegion !== v.scores?.region ||
+        prevNote !== nextNote ||
+        prevFollow !== nextFollow
+      ) {
         applyOne(id, v);
       }
     }
@@ -739,7 +887,9 @@
       const id = "rf" + counter++;
       article.setAttribute(PROCESSED_ATTR, id);
       elById.set(id, article);
-      queue.push(buildItem(article, id, text));
+      const item = buildItem(article, id, text);
+      queue.push(item);
+      requestBasedIn(item.handle);
       ensureScoreChip(article);
     }
     if (queue.length) scheduleFlush();
@@ -792,7 +942,7 @@
 
   const VALUE_DIMS = ["payload"];
   const NOISE_DIMS = ["hijack", "vacuity", "persona"];
-  const SIGNAL_NOISE_DIMS = ["bot"];
+  const SIGNAL_NOISE_DIMS = ["bot", "region"];
 
   function dimMax(scores, dims) {
     let m = 0;
@@ -1162,9 +1312,10 @@
     noiseSec.textContent = "Noise";
     body.append(noiseSec);
     appendDimRows(body, v, NOISE_DIMS.filter((d) => d !== "persona" || v.scores?.persona != null), "noise");
-    if (v.scores && Object.prototype.hasOwnProperty.call(v.scores, "bot")) {
-      appendDimRows(body, v, SIGNAL_NOISE_DIMS, "noise");
-    }
+    const localDims = SIGNAL_NOISE_DIMS.filter(
+      (d) => v.scores && Object.prototype.hasOwnProperty.call(v.scores, d)
+    );
+    if (localDims.length) appendDimRows(body, v, localDims, "noise");
     if (followed) {
       const slack = document.createElement("div");
       slack.className = "row noise";
@@ -1199,6 +1350,9 @@
       if (account.following != null) bits.push(`${account.following} following`);
       if (account.tweets != null) bits.push(`${account.tweets} tweets`);
       if (account.iFollow === true) bits.push("you follow");
+      const basedIn = account.basedIn ?? basedInFor(account.handle);
+      if (basedIn) bits.push(`based in ${basedIn}`);
+      else if (account.location) bits.push(account.location);
       acct.textContent = bits.join(" · ");
       body.append(acct);
     }
@@ -1331,7 +1485,7 @@
         const account = mergeAccount(sig.account, author);
         const iFollow = inferIFollow(el, account);
         if (account && typeof iFollow === "boolean") account.iFollow = iFollow;
-        applyBotPrior(v, account);
+        applyLocalSignals(v, account);
       }
       verdictById.set(id, v);
       applyOne(id, v);

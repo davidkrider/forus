@@ -18,6 +18,8 @@ const els = {
   useAccountSignals: $("#useAccountSignals"),
   useCommunityNotes: $("#useCommunityNotes"),
   lenientOnFollows: $("#lenientOnFollows"),
+  blockedRegions: $("#blockedRegions"),
+  fetchBasedIn: $("#fetchBasedIn"),
   save: $("#save"),
   test: $("#test"),
   status: $("#status")
@@ -47,6 +49,8 @@ function render() {
   els.useAccountSignals.checked = config.useAccountSignals !== false;
   els.useCommunityNotes.checked = config.useCommunityNotes !== false;
   els.lenientOnFollows.checked = config.lenientOnFollows !== false;
+  els.blockedRegions.value = (config.blockedRegions || []).join(", ");
+  els.fetchBasedIn.checked = config.fetchBasedIn === true;
   applyBackendFields();
 }
 
@@ -62,6 +66,11 @@ function collect() {
   config.useAccountSignals = els.useAccountSignals.checked;
   config.useCommunityNotes = els.useCommunityNotes.checked;
   config.lenientOnFollows = els.lenientOnFollows.checked;
+  config.blockedRegions = els.blockedRegions.value
+    .split(/[,\n]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  config.fetchBasedIn = els.fetchBasedIn.checked;
 }
 
 function setStatus(msg, kind = "") {
